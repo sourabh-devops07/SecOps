@@ -1,6 +1,4 @@
 
-
-```yaml
 name: SecOps Pipeline
 
 on:
@@ -9,8 +7,7 @@ on:
       - application_push
 
 jobs:
-
-  # Stage 1: Secret Scanning
+  # Stage 1 : Secret Scanning
   gitleaks:
     name: Gitleaks - Secret Scanning
     runs-on: ubuntu-latest
@@ -36,8 +33,8 @@ jobs:
           echo "Checked Out Commit SHA:"
           git -C application rev-parse HEAD
 
-      # Scan application source for secrets
-      - name: Scan for Application Secrets
+      # Scan the checked-out application source for secrets
+      - name: Step 4 - Scan for Application Secrets
         run: |
           docker run --rm \
             -v "${GITHUB_WORKSPACE}/application:/repo" \
@@ -46,16 +43,30 @@ jobs:
             --source=/repo \
             --no-git \
             --no-banner \
+            --report-format json \
+            --report-path /repo/gitleaks-report.json \
             --exit-code 1
 
-      - name: List Scanned Files
+      - name: Step 4B - Show Detected Secrets
+        if: always()
+        run: |
+          echo "Gitleaks Findings:"
+          echo "====================================="
+          if [ -f "application/gitleaks-report.json" ]; then
+            cat application/gitleaks-report.json | jq -r '
+              .[] | "File: \(.File)\nLine: \(.StartLine)\nRule: \(.RuleID)\nSecret: \(.Match)\nCommit: \(.Commit // "N/A")\n---"
+            '
+          else
+            echo "No report file found — either no secrets were detected or the scan did not run."
+          fi
+
+      - name: Step 4A - List Scanned Files
         run: |
           echo "Files Inside Gitleaks Scanning Scope:"
           echo "====================================="
           find application -type f -print
 
-
-  # Stage 2: Dependency Scanning
+  # Stage 2 : Dependency Scanning
   trivy:
     name: Trivy - Dependency Scanning
     runs-on: ubuntu-latest
@@ -132,4 +143,3 @@ jobs:
         with:
           name: trivy-dependency-report
           path: application/trivy-report.json
-```
